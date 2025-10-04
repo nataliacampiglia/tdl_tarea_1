@@ -1,0 +1,20 @@
+wandb_version: 1
+
+batch_size:
+  value: 256
+dropout:
+  value: 0.2
+early_stop:
+  value: false
+label_smoothing:
+  value: 0
+learning_rate:
+  value: 0.00018966599062268704
+optimizer:
+  value: sgd
+patience:
+  value: 3
+seed:
+  value: 7
+weight_decay:
+  value: 0.0005
