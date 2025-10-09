@@ -1,1 +1,3 @@
 data/imagenette2/*
+wandb/*
+model_*.pth
