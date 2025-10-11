@@ -138,7 +138,7 @@ def train(
     return epoch_train_errors, epoch_val_errors
 
 
-def plot_taining(train_errors, val_errors):
+def plot_training(train_errors, val_errors):
     # Graficar los errores
     plt.figure(figsize=(10, 5))  # Define el tamaño de la figura
     plt.plot(train_errors, label="Train Loss")  # Grafica la pérdida de entrenamiento
@@ -151,7 +151,7 @@ def plot_taining(train_errors, val_errors):
     plt.show()  # Muestra el gráfico
 
 
-def model_calassification_report(model, dataloader, device, nclasses):
+def model_classification_report(model, dataloader, device, nclasses):
     # Evaluación del modelo
     model.eval()
 
