@@ -151,7 +151,7 @@ def plot_taining(train_errors, val_errors):
     plt.show()  # Muestra el gráfico
 
 
-def model_calassification_report(model, dataloader, device, nclasses):
+def model_classification_report(model, dataloader, device, nclasses):
     # Evaluación del modelo
     model.eval()
 
@@ -175,6 +175,7 @@ def model_calassification_report(model, dataloader, device, nclasses):
         all_labels, all_preds, target_names=[str(i) for i in range(nclasses)]
     )
     print("Reporte de clasificación:\n", report)
+
 
 
 def show_tensor_image(tensor, title=None, vmin=None, vmax=None):
@@ -221,3 +222,16 @@ def show_tensor_images(tensors, titles=None, figsize=(15, 5), vmin=None, vmax=No
             ax.set_title(titles[i])
         ax.axis("off")
     plt.show()
+
+
+def plot_training(train_errors, val_errors):
+    # Graficar los errores
+    plt.figure(figsize=(10, 5))  # Define el tamaño de la figura
+    plt.plot(train_errors, label="Train Loss")  # Grafica la pérdida de entrenamiento
+    plt.plot(val_errors, label="Validation Loss")  # Grafica la pérdida de validación
+    plt.title("Training and Validation Loss")  # Título del gráfico
+    plt.xlabel("Epochs")  # Etiqueta del eje X
+    plt.ylabel("Loss")  # Etiqueta del eje Y
+    plt.legend()  # Añade una leyenda
+    plt.grid(True)  # Añade una cuadrícula para facilitar la visualización
+    plt.show()  # Muestra el gráfico
