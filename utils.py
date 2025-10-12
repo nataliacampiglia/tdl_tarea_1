@@ -170,11 +170,18 @@ def model_classification_report(model, dataloader, device, nclasses):
     accuracy = accuracy_score(all_labels, all_preds)
     print(f"Accuracy: {accuracy:.4f}\n")
 
-    # Reporte de clasificación
     report = classification_report(
         all_labels, all_preds, target_names=[str(i) for i in range(nclasses)]
     )
     print("Reporte de clasificación:\n", report)
+    # Reporte de clasificación
+    report = classification_report(
+        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)], output_dict=True
+    )
+
+    macroAvg = report["macro avg"]
+    
+    return accuracy, macroAvg["precision"], macroAvg["recall"], macroAvg["f1-score"], macroAvg["support"]
 
 
 
