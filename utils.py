@@ -2,6 +2,8 @@ import torch
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
     accuracy_score,
+    confusion_matrix,
+    balanced_accuracy_score,
     classification_report,
 )
 
@@ -170,9 +172,44 @@ def model_classification_report(model, dataloader, device, nclasses):
     accuracy = accuracy_score(all_labels, all_preds)
     print(f"Accuracy: {accuracy:.4f}\n")
 
-    # Reporte de clasificación
     report = classification_report(
         all_labels, all_preds, target_names=[str(i) for i in range(nclasses)]
+    )
+    print("Reporte de clasificación:\n", report)
+    # Reporte de clasificación
+    report = classification_report(
+        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)], output_dict=True
+    )
+
+    macroAvg = report["macro avg"]
+    
+    return accuracy, macroAvg["precision"], macroAvg["recall"], macroAvg["f1-score"], macroAvg["support"]
+
+def model_binary_classification_report(model, dataloader, device, threshold=0.5, logits=True):
+    # Evaluación del modelo
+    model.eval()
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs = inputs.to(device)
+            outputs = model(inputs)
+            if logits:
+                preds = (torch.sigmoid(outputs) >= threshold).long().squeeze()
+            else:
+                preds = (outputs >= threshold).long().squeeze()
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels.numpy())
+
+    # Calcular precisión (accuracy)
+    accuracy = accuracy_score(all_labels, all_preds)
+    print(f"Accuracy: {accuracy:.4f}\n")
+
+    # Reporte de clasificación
+    report = classification_report(
+        all_labels, all_preds, target_names=["Normal", "Anomalous"]
     )
     print("Reporte de clasificación:\n", report)
 
