@@ -153,7 +153,7 @@ def plot_training(train_errors, val_errors):
     plt.show()  # Muestra el gráfico
 
 
-def model_calassification_report(model, dataloader, device, nclasses):
+def model_classification_report(model, dataloader, device, nclasses):
     # Evaluación del modelo
     model.eval()
 
@@ -172,11 +172,14 @@ def model_calassification_report(model, dataloader, device, nclasses):
     accuracy = accuracy_score(all_labels, all_preds)
     print(f"Accuracy: {accuracy:.4f}\n")
 
-    # Reporte de clasificación
     report = classification_report(
         all_labels, all_preds, target_names=[str(i) for i in range(nclasses)]
     )
     print("Reporte de clasificación:\n", report)
+    # Reporte de clasificación
+    report = classification_report(
+        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)], output_dict=True
+    )
 
 
 def model_binary_classification_report(model, dataloader, device, threshold=0.5, logits=True):
