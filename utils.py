@@ -4,7 +4,8 @@ from sklearn.metrics import (
     accuracy_score,
     classification_report,
 )
-
+import wandb, json
+import numpy as np
 
 def evaluate(model, criterion, data_loader, device):
     """
@@ -242,8 +243,7 @@ def plot_sweep_metrics_comparison(accuracies, precisions, recalls, f1_scores, sw
         sweep_id (str): ID del sweep de Weights & Biases
         WANDB_PROJECT (str): Nombre del proyecto de Weights & Biases
     """
-    import wandb
-    import numpy as np
+   
     
     # Obtener todos los runs del sweep
     api = wandb.Api()
@@ -312,5 +312,67 @@ def plot_sweep_metrics_comparison(accuracies, precisions, recalls, f1_scores, sw
     print(f"Mejor: {run_names[maxArg]} {f1_scores[maxArg]:.4f}")
 
     # return best_accuracy_index run id
-    print(f"Mejor run ID: {runs[best_accuracy_index].id}")
+    print(f"\n\nMejor run ID: {runs[best_accuracy_index].id}")
     return runs[best_accuracy_index].id
+
+def summary_dict(r):
+    s = getattr(r, "summary_metrics", None)
+    if isinstance(s, str):
+        try:
+            return json.loads(s)
+        except Exception:
+            return {}
+    if isinstance(s, dict):
+        return s
+    # fallback para r.summary con wrapper antiguo
+    s2 = getattr(getattr(r, "summary", {}), "_json_dict", {})
+    if isinstance(s2, dict):
+        return s2
+    return {}
+
+# define download run function
+def download_run(run_id, WANDB_PROJECT, model_name="model.pth"):
+    """
+    Descarga los pesos de un run de Weights & Biases.
+    """
+   
+
+    api = wandb.Api()
+
+    ENTITY = api.default_entity  # usá el entity correcto según tu URL
+
+    # 1) Traer el run por path
+    run_path = f"{ENTITY}/{WANDB_PROJECT}/{run_id}"
+    run = api.run(run_path)
+
+    print("RUN:", run.id, "| name:", run.name)
+    print("URL:", run.url)
+    print("STATE:", run.state)
+    print("CONFIG:", dict(run.config))
+
+    # 2) Leer summary de forma segura (algunas versiones lo devuelven como string)
+
+
+    summary = summary_dict(run)
+    print("SUMMARY KEYS:", [k for k in summary.keys() if not k.startswith("_")])
+    print("val_loss:", summary.get("val_loss"))
+
+    # 3) Descargar el modelo de ese run
+    #    Si el archivo exacto no existe, listá los .pth disponibles.
+    try:
+        run.file(model_name).download(replace=True)
+        print(f"Descargado: {model_name}")
+    except Exception as e:
+        print(f"No encontré {model_name} directamente:", e)
+        print("Buscando .pth disponibles en el run...")
+        pth_files = [f for f in run.files() if f.name.endswith(".pth")]
+        for f in pth_files:
+            print("->", f.name, f.size)
+        if pth_files:
+            pth_files[0].download(replace=True)
+            print("Descargado:", pth_files[0].name)
+        else:
+            print("No hay archivos .pth en este run.")
+
+    print("CONFIG:", run.config)
+    return run.config
