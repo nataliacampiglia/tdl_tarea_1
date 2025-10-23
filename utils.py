@@ -2,8 +2,6 @@ import torch
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
     accuracy_score,
-    confusion_matrix,
-    balanced_accuracy_score,
     classification_report,
 )
 
@@ -153,7 +151,7 @@ def plot_training(train_errors, val_errors):
     plt.show()  # Muestra el gráfico
 
 
-def model_classification_report(model, dataloader, device, nclasses):
+def model_classification_report(model, dataloader, device, nclasses, output_dict=False):
     # Evaluación del modelo
     model.eval()
 
@@ -170,46 +168,20 @@ def model_classification_report(model, dataloader, device, nclasses):
 
     # Calcular precisión (accuracy)
     accuracy = accuracy_score(all_labels, all_preds)
-    print(f"Accuracy: {accuracy:.4f}\n")
+    
 
     report = classification_report(
-        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)]
+        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)], 
+        output_dict=output_dict
     )
-    print("Reporte de clasificación:\n", report)
-    # Reporte de clasificación
-    report = classification_report(
-        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)], output_dict=True
-    )
+    if not output_dict:
+        print(f"Accuracy: {accuracy:.4f}\n")
+        print("Reporte de clasificación:\n", report)
+    else:
+        macroAvg = report["macro avg"]
+        return accuracy, macroAvg["precision"], macroAvg["recall"], macroAvg["f1-score"], macroAvg["support"]
 
-
-def model_binary_classification_report(model, dataloader, device, threshold=0.5, logits=True):
-    # Evaluación del modelo
-    model.eval()
-
-    all_preds = []
-    all_labels = []
-
-    with torch.no_grad():
-        for inputs, labels in dataloader:
-            inputs = inputs.to(device)
-            outputs = model(inputs)
-            if logits:
-                preds = (torch.sigmoid(outputs) >= threshold).long().squeeze()
-            else:
-                preds = (outputs >= threshold).long().squeeze()
-            all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.numpy())
-
-    # Calcular precisión (accuracy)
-    accuracy = accuracy_score(all_labels, all_preds)
-    print(f"Accuracy: {accuracy:.4f}\n")
-
-    # Reporte de clasificación
-    report = classification_report(
-        all_labels, all_preds, target_names=["Normal", "Anomalous"]
-    )
-    print("Reporte de clasificación:\n", report)
-
+    return report
 
 def show_tensor_image(tensor, title=None, vmin=None, vmax=None):
     """
@@ -255,3 +227,90 @@ def show_tensor_images(tensors, titles=None, figsize=(15, 5), vmin=None, vmax=No
             ax.set_title(titles[i])
         ax.axis("off")
     plt.show()
+
+
+def plot_sweep_metrics_comparison(accuracies, precisions, recalls, f1_scores, sweep_id, WANDB_PROJECT):
+    """
+    Crea un gráfico de barras que compara las métricas de rendimiento de diferentes runs de un sweep.
+    
+    Args:
+        accuracies (list): Lista de valores de accuracy para cada run
+        precisions (list): Lista de valores de precision para cada run
+        recalls (list): Lista de valores de recall para cada run
+        f1_scores (list): Lista de valores de f1-score para cada run
+        run_names (list): Lista de nombres de los runs
+        sweep_id (str): ID del sweep de Weights & Biases
+        WANDB_PROJECT (str): Nombre del proyecto de Weights & Biases
+    """
+    import wandb
+    import numpy as np
+    
+    # Obtener todos los runs del sweep
+    api = wandb.Api()
+    ENTITY = api.default_entity
+    sweep = api.sweep(f"{ENTITY}/{WANDB_PROJECT}/{sweep_id}")
+
+    # Extraer datos de todos los runs
+    runs = []
+    run_names = []
+
+    for run in sweep.runs:
+        if run.state == "finished":  # Solo runs completados
+            runs.append(run)
+            run_names.append(run.name)
+
+    # Configurar colores para cada métrica
+    colors = ['skyblue', 'lightcoral', 'lightgreen', 'gold']
+    metrics = [accuracies, precisions, recalls, f1_scores]
+    metric_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+    y_labels = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+
+    # Crear gráfico combinado
+    x = np.arange(len(run_names))  # posiciones de las barras por modelo
+    width = 0.2  # ancho de cada barra
+
+    # Crear figura
+    fig, ax = plt.subplots(figsize=(14, 5))
+
+    # Dibujar cada métrica desplazada
+    for i, metric in enumerate(metrics):
+        if len(metric) != len(run_names):
+            print(f"⚠️ Longitud de {metric_names[i]} ({len(metric)}) no coincide con run_names ({len(run_names)}). Se omite.")
+            continue
+        ax.bar(x + i*width, metric, width, label=metric_names[i], color=colors[i])
+
+    # Personalización
+    ax.set_xlabel("Modelos")
+    ax.set_ylabel("Puntaje")
+    ax.set_title("Comparación de Métricas por Modelo")
+    ax.set_xticks(x + width * (len(metrics)-1)/2)
+    ax.set_xticklabels(run_names)
+    ax.legend()
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Mostrar
+    plt.tight_layout()
+    plt.show()
+
+    # Mostrar información adicional
+    print(f"\n=== RESUMEN DE MÉTRICAS ===")
+    print(f"Total de runs completados: {len(run_names)}")
+    print(f"\n--- Accuracy ---")
+    best_accuracy_index = np.argmax(accuracies)
+    print(f"Mejor: {run_names[best_accuracy_index]} {accuracies[best_accuracy_index]:.4f}")
+
+    print(f"\n--- Precision ---")
+    maxArg = np.argmax(precisions)
+    print(f"Mejor: {run_names[maxArg]} {precisions[maxArg]:.4f}")
+
+    print(f"\n--- Recall ---")
+    maxArg = np.argmax(recalls)
+    print(f"Mejor: {run_names[maxArg]} {recalls[maxArg]:.4f}")
+
+    print(f"\n--- F1-Score ---")
+    maxArg = np.argmax(f1_scores)
+    print(f"Mejor: {run_names[maxArg]} {f1_scores[maxArg]:.4f}")
+
+    # return best_accuracy_index run id
+    print(f"Mejor run ID: {runs[best_accuracy_index].id}")
+    return runs[best_accuracy_index].id
