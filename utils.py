@@ -154,7 +154,7 @@ def plot_training(train_errors, val_errors):
     plt.show()  # Muestra el gráfico
 
 
-def model_classification_report(model, dataloader, device, nclasses, output_dict=False):
+def model_classification_report(model, dataloader, device, nclasses, output_dict=False, do_confusion_matrix=False):
     # Evaluación del modelo
     model.eval()
 
@@ -183,6 +183,11 @@ def model_classification_report(model, dataloader, device, nclasses, output_dict
     else:
         macroAvg = report["macro avg"]
         return accuracy, macroAvg["precision"], macroAvg["recall"], macroAvg["f1-score"], macroAvg["support"]
+        
+    # Matriz de confusión
+    if do_confusion_matrix:
+        cm = confusion_matrix(all_labels, all_preds)
+        print("Matriz de confusión:\n", cm, "\n")
 
     return report
 
