@@ -32,7 +32,7 @@ def evaluate(model, criterion, data_loader, device):
 
 
 class EarlyStopping:
-    def __init__(self, patience=5):
+    def __init__(self, patience=5, delta=0.001):
         """
         Args:
             patience (int): Cuántas épocas esperar después de la última mejora.
@@ -42,9 +42,11 @@ class EarlyStopping:
         self.best_score = float("inf")
         self.val_loss_min = float("inf")
         self.early_stop = False
+        self.delta = delta
 
     def __call__(self, val_loss):
-        if val_loss > self.best_score:
+        # if val_loss > self.best_score + delta:
+        if val_loss > self.best_score + self.delta:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
