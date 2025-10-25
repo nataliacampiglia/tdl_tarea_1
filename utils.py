@@ -2,11 +2,10 @@ import torch
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
     accuracy_score,
-    confusion_matrix,
-    balanced_accuracy_score,
     classification_report,
 )
-
+import wandb, json
+import numpy as np
 
 def evaluate(model, criterion, data_loader, device):
     """
@@ -33,7 +32,7 @@ def evaluate(model, criterion, data_loader, device):
 
 
 class EarlyStopping:
-    def __init__(self, patience=5):
+    def __init__(self, patience=5, delta=0.001):
         """
         Args:
             patience (int): Cuántas épocas esperar después de la última mejora.
@@ -43,9 +42,11 @@ class EarlyStopping:
         self.best_score = float("inf")
         self.val_loss_min = float("inf")
         self.early_stop = False
+        self.delta = delta
 
     def __call__(self, val_loss):
-        if val_loss > self.best_score:
+        # if val_loss > self.best_score + delta:
+        if val_loss > self.best_score + self.delta:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
@@ -153,7 +154,7 @@ def plot_training(train_errors, val_errors):
     plt.show()  # Muestra el gráfico
 
 
-def model_classification_report(model, dataloader, device, nclasses):
+def model_classification_report(model, dataloader, device, nclasses, output_dict=False, do_confusion_matrix=False):
     # Evaluación del modelo
     model.eval()
 
@@ -170,46 +171,25 @@ def model_classification_report(model, dataloader, device, nclasses):
 
     # Calcular precisión (accuracy)
     accuracy = accuracy_score(all_labels, all_preds)
-    print(f"Accuracy: {accuracy:.4f}\n")
+    
 
     report = classification_report(
-        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)]
+        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)], 
+        output_dict=output_dict
     )
-    print("Reporte de clasificación:\n", report)
-    # Reporte de clasificación
-    report = classification_report(
-        all_labels, all_preds, target_names=[str(i) for i in range(nclasses)], output_dict=True
-    )
+    if not output_dict:
+        print(f"Accuracy: {accuracy:.4f}\n")
+        print("Reporte de clasificación:\n", report)
+    else:
+        macroAvg = report["macro avg"]
+        return accuracy, macroAvg["precision"], macroAvg["recall"], macroAvg["f1-score"], macroAvg["support"]
+        
+    # Matriz de confusión
+    if do_confusion_matrix:
+        cm = confusion_matrix(all_labels, all_preds)
+        print("Matriz de confusión:\n", cm, "\n")
 
-
-def model_binary_classification_report(model, dataloader, device, threshold=0.5, logits=True):
-    # Evaluación del modelo
-    model.eval()
-
-    all_preds = []
-    all_labels = []
-
-    with torch.no_grad():
-        for inputs, labels in dataloader:
-            inputs = inputs.to(device)
-            outputs = model(inputs)
-            if logits:
-                preds = (torch.sigmoid(outputs) >= threshold).long().squeeze()
-            else:
-                preds = (outputs >= threshold).long().squeeze()
-            all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.numpy())
-
-    # Calcular precisión (accuracy)
-    accuracy = accuracy_score(all_labels, all_preds)
-    print(f"Accuracy: {accuracy:.4f}\n")
-
-    # Reporte de clasificación
-    report = classification_report(
-        all_labels, all_preds, target_names=["Normal", "Anomalous"]
-    )
-    print("Reporte de clasificación:\n", report)
-
+    return report
 
 def show_tensor_image(tensor, title=None, vmin=None, vmax=None):
     """
@@ -255,3 +235,151 @@ def show_tensor_images(tensors, titles=None, figsize=(15, 5), vmin=None, vmax=No
             ax.set_title(titles[i])
         ax.axis("off")
     plt.show()
+
+
+def plot_sweep_metrics_comparison(accuracies, precisions, recalls, f1_scores, sweep_id, WANDB_PROJECT):
+    """
+    Crea un gráfico de barras que compara las métricas de rendimiento de diferentes runs de un sweep.
+    
+    Args:
+        accuracies (list): Lista de valores de accuracy para cada run
+        precisions (list): Lista de valores de precision para cada run
+        recalls (list): Lista de valores de recall para cada run
+        f1_scores (list): Lista de valores de f1-score para cada run
+        run_names (list): Lista de nombres de los runs
+        sweep_id (str): ID del sweep de Weights & Biases
+        WANDB_PROJECT (str): Nombre del proyecto de Weights & Biases
+    """
+   
+    
+    # Obtener todos los runs del sweep
+    api = wandb.Api()
+    ENTITY = api.default_entity
+    sweep = api.sweep(f"{ENTITY}/{WANDB_PROJECT}/{sweep_id}")
+
+    # Extraer datos de todos los runs
+    runs = []
+    run_names = []
+
+    for run in sweep.runs:
+        if run.state == "finished":  # Solo runs completados
+            runs.append(run)
+            run_names.append(run.name)
+
+    # Configurar colores para cada métrica
+    colors = ['skyblue', 'lightcoral', 'lightgreen', 'gold']
+    metrics = [accuracies, precisions, recalls, f1_scores]
+    metric_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+    y_labels = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+
+    # Crear gráfico combinado
+    x = np.arange(len(run_names))  # posiciones de las barras por modelo
+    width = 0.2  # ancho de cada barra
+
+    # Crear figura
+    fig, ax = plt.subplots(figsize=(14, 5))
+
+    # Dibujar cada métrica desplazada
+    for i, metric in enumerate(metrics):
+        if len(metric) != len(run_names):
+            print(f"⚠️ Longitud de {metric_names[i]} ({len(metric)}) no coincide con run_names ({len(run_names)}). Se omite.")
+            continue
+        ax.bar(x + i*width, metric, width, label=metric_names[i], color=colors[i])
+
+    # Personalización
+    ax.set_xlabel("Modelos")
+    ax.set_ylabel("Puntaje")
+    ax.set_title("Comparación de Métricas por Modelo")
+    ax.set_xticks(x + width * (len(metrics)-1)/2)
+    ax.set_xticklabels(run_names)
+    ax.legend()
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Mostrar
+    plt.tight_layout()
+    plt.show()
+
+    # Mostrar información adicional
+    print(f"\n=== RESUMEN DE MÉTRICAS ===")
+    print(f"Total de runs completados: {len(run_names)}")
+    print(f"\n--- Accuracy ---")
+    best_accuracy_index = np.argmax(accuracies)
+    print(f"Mejor: {run_names[best_accuracy_index]} {accuracies[best_accuracy_index]:.4f}")
+
+    print(f"\n--- Precision ---")
+    maxArg = np.argmax(precisions)
+    print(f"Mejor: {run_names[maxArg]} {precisions[maxArg]:.4f}")
+
+    print(f"\n--- Recall ---")
+    maxArg = np.argmax(recalls)
+    print(f"Mejor: {run_names[maxArg]} {recalls[maxArg]:.4f}")
+
+    print(f"\n--- F1-Score ---")
+    maxArg = np.argmax(f1_scores)
+    print(f"Mejor: {run_names[maxArg]} {f1_scores[maxArg]:.4f}")
+
+    # return best_accuracy_index run id
+    print(f"\n\nMejor run ID: {runs[best_accuracy_index].id}")
+    return runs[best_accuracy_index].id
+
+def summary_dict(r):
+    s = getattr(r, "summary_metrics", None)
+    if isinstance(s, str):
+        try:
+            return json.loads(s)
+        except Exception:
+            return {}
+    if isinstance(s, dict):
+        return s
+    # fallback para r.summary con wrapper antiguo
+    s2 = getattr(getattr(r, "summary", {}), "_json_dict", {})
+    if isinstance(s2, dict):
+        return s2
+    return {}
+
+# define download run function
+def download_run(run_id, WANDB_PROJECT, model_name="model.pth"):
+    """
+    Descarga los pesos de un run de Weights & Biases.
+    """
+   
+
+    api = wandb.Api()
+
+    ENTITY = api.default_entity  # usá el entity correcto según tu URL
+
+    # 1) Traer el run por path
+    run_path = f"{ENTITY}/{WANDB_PROJECT}/{run_id}"
+    run = api.run(run_path)
+
+    print("RUN:", run.id, "| name:", run.name)
+    print("URL:", run.url)
+    print("STATE:", run.state)
+    print("CONFIG:", dict(run.config))
+
+    # 2) Leer summary de forma segura (algunas versiones lo devuelven como string)
+
+
+    summary = summary_dict(run)
+    print("SUMMARY KEYS:", [k for k in summary.keys() if not k.startswith("_")])
+    print("val_loss:", summary.get("val_loss"))
+
+    # 3) Descargar el modelo de ese run
+    #    Si el archivo exacto no existe, listá los .pth disponibles.
+    try:
+        run.file(model_name).download(replace=True)
+        print(f"Descargado: {model_name}")
+    except Exception as e:
+        print(f"No encontré {model_name} directamente:", e)
+        print("Buscando .pth disponibles en el run...")
+        pth_files = [f for f in run.files() if f.name.endswith(".pth")]
+        for f in pth_files:
+            print("->", f.name, f.size)
+        if pth_files:
+            pth_files[0].download(replace=True)
+            print("Descargado:", pth_files[0].name)
+        else:
+            print("No hay archivos .pth en este run.")
+
+    print("CONFIG:", run.config)
+    return run.config
