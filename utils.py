@@ -257,27 +257,22 @@ def plot_sweep_metrics_comparison(accuracies, precisions, recalls, f1_scores, sw
     ENTITY = api.default_entity
     sweep = api.sweep(f"{ENTITY}/{WANDB_PROJECT}/{sweep_id}")
 
-    # Extraer datos de todos los runs
-    runs = []
-    run_names = []
-
-    for run in sweep.runs:
-        if run.state == "finished":  # Solo runs completados
-            runs.append(run)
-            run_names.append(run.name)
+    # # Extraer datos de todos los runs
+    # Ordenar por fecha de creación (más antiguo → más nuevo)
+    runs = sorted(sweep.runs, key=lambda r: r.created_at)
+    run_names = [run.name for run in runs]
 
     # Configurar colores para cada métrica
     colors = ['skyblue', 'lightcoral', 'lightgreen', 'gold']
     metrics = [accuracies, precisions, recalls, f1_scores]
     metric_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
-    y_labels = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
 
     # Crear gráfico combinado
     x = np.arange(len(run_names))  # posiciones de las barras por modelo
     width = 0.2  # ancho de cada barra
 
     # Crear figura
-    fig, ax = plt.subplots(figsize=(14, 5))
+    _, ax = plt.subplots(figsize=(14, 5))
 
     # Dibujar cada métrica desplazada
     for i, metric in enumerate(metrics):
